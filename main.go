@@ -25,7 +25,7 @@ func main() {
 
 		msg := UnpackMsg(buf)
 
-		log.Println(msg)
+		log.Println(msg.header, " | ", msg.header.Flags, " | ", msg.question[0].Name)
 
 		log.Println("from:", addr)
 		log.Println("len:", n, "bytes:", buf[0:n])
@@ -73,4 +73,8 @@ func check_error(err error) {
 	if err != nil {
 		log.Println(err)
 	}
+}
+
+func debug(fmt ...interface{}) {
+	log.Println(fmt...)
 }
