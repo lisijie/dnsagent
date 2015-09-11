@@ -10,6 +10,7 @@ type Header struct {
 	Arcount uint16 // 报文附加段中的附加记录数
 }
 
+// 头部标识位信息
 type MsgFlags struct {
 	Response           bool // QR:长度1位，值0是请求，1是应答
 	Opcode             int  // 长度4位，值0是标准查询，1是反向查询，2死服务器状态查询。
@@ -36,47 +37,10 @@ func UnpackMsg(buf []byte) *Msg {
 
 func unpackHeader(pkt *packet) *Header {
 	hd := new(Header)
-	hd.Id = pkt.readUint16()
-	hd.Flags = pkt.readUint16()
-	hd.Qdcount = pkt.readUint16()
-	hd.Nscount = pkt.readUint16()
-	hd.Arcount = pkt.readUint16()
+	hd.Id = pkt.ReadUint16()
+	hd.Flags = pkt.ReadUint16()
+	hd.Qdcount = pkt.ReadUint16()
+	hd.Nscount = pkt.ReadUint16()
+	hd.Arcount = pkt.ReadUint16()
 	return hd
-}
-
-type packet struct {
-	buf  []byte
-	size uint
-	pos  uint
-}
-
-func NewPacket(buf []byte) *packet {
-	return &packet{buf: buf, size: uint(len(buf)), pos: 0}
-}
-
-func (p *packet) readUint16() uint16 {
-	i := uint16(p.buf[p.pos])<<8 | uint16(p.buf[p.pos+1])
-	p.pos += 2
-	return i
-}
-
-func (p *packet) readByte() byte {
-	b := p.buf[p.pos]
-	p.pos += 1
-	return b
-}
-
-func (p *packet) readBytes(n uint) []byte {
-	if n > p.size-p.pos {
-		n = p.size - p.pos
-	}
-	b := p.buf[p.pos : p.pos+n]
-	p.pos += n
-	return b
-}
-
-func (p *packet) seek(n uint) {
-	if n < p.size {
-		p.pos = n
-	}
 }
