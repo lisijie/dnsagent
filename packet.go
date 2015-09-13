@@ -31,8 +31,34 @@ func (p *packet) ReadBytes(n uint) []byte {
 	return b
 }
 
+func (p *packet) WriteByte(b byte) bool {
+	p.buf = append(p.buf, b)
+	p.size++
+	return true
+}
+
+func (p *packet) WriteUint16(n uint16) bool {
+	p.buf = append(p.buf, byte(n>>8&0xFF), byte(n&0xFF))
+	p.size += 2
+	return true
+}
+
+func (p *packet) WriteBytes(bs []byte) bool {
+	p.buf = append(p.buf, bs...)
+	p.size += len(bs)
+	return true
+}
+
+func (p *packet) WriteString(s string) bool {
+	return p.WriteBytes([]byte(s))
+}
+
 func (p *packet) Seek(n uint) {
 	if n < p.size {
 		p.pos = n
 	}
+}
+
+func (p *packet) Bytes() {
+	return p.buf
 }

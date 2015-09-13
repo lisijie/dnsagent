@@ -60,6 +60,12 @@ func UnpackMsg(buf []byte) *Msg {
 	return msg
 }
 
+func PackMsg(msg *Msg) []byte {
+	pkt := NewPacket(make([]byte, 0, 1024))
+
+	return pkt.Bytes()
+}
+
 // 解析包头（12字节）
 func unpackHeader(pkt *packet) *Header {
 	hd := new(Header)
