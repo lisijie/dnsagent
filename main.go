@@ -20,10 +20,16 @@ func main() {
 	defer sock.Close()
 
 	for {
+
+		// 读取UDP数据包
 		buf := make([]byte, 1024)
 		n, addr, _ := sock.ReadFromUDP(buf)
 
+		// DNS报文解析
 		msg := UnpackMsg(buf)
+		if msg.question[0].Name == "www.test.com" {
+			msg.header.Flags.Qr = 1
+		}
 
 		log.Println(msg.header, " | ", msg.header.Flags, " | ", msg.question[0].Name)
 

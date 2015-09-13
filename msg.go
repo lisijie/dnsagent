@@ -3,6 +3,22 @@ package main
 import "strings"
 
 // 包头，12字节
+//                                     1  1  1  1  1  1
+//      0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//    |                      ID                       |
+//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//    |QR|   Opcode  |AA|TC|RD|RA|   Z    |   RCODE   |
+//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//    |                    QDCOUNT                    |
+//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//    |                    ANCOUNT                    |
+//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//    |                    NSCOUNT                    |
+//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//    |                    ARCOUNT                    |
+//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//
 type Header struct {
 	Id      uint16       // ID
 	Flags   *HeaderFlags // 标识信息，共16位
@@ -31,23 +47,31 @@ type Question struct {
 	Class uint16 // 16位，查询类别
 }
 
-// 应答结构
-type Reply struct {
-	Name    string
-	Type    uint16
-	Class   uint16
-	TTL     int
-	Rdlenth uint16
-	Rdata   string
+// 应答结构,资源记录格式(Resource record)
+type Resource struct {
+	Name    string // 资源记录包含的域名
+	Type    uint16 // 2个字节表示资源记录的类型，指出RDATA数据的含义
+	Class   uint16 // 2个字节表示RDATA的类
+	TTL     uint   // 4字节无符号整数表示资源记录可以缓存的时间。0代表只能被传输，但是不能被缓存。
+	Rdlenth uint16 // 2个字节无符号整数表示RDATA的长度
+	Rdata   string // 不定长字符串来表示记录，格式根TYPE和CLASS有关。比如，TYPE是A，CLASS 是 IN，那么RDATA就是一个4个字节的ARPA网络地址。
 }
 
 // 消息结构
 type Msg struct {
 	header   *Header
 	question []Question
-	Answer   []Reply
-	Ns       []Reply
-	Extra    []Reply
+	Answer   []Resource
+	Ns       []Resource
+	Extra    []Resource
+}
+
+func (m *Msg) GetHeader() *Header {
+	return m.header
+}
+
+func (m *Msg) GetQuestion(n uint) Question {
+	return m.question[n]
 }
 
 // 消息解析
