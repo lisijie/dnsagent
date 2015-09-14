@@ -6,6 +6,7 @@
 
 	$ go get github.com/lisijie/dnsagent
 	$ cd github.com/lisijie/dnsagent
+	$ go build
 	$ sudo ./dnsagent --debug --dns=8.8.8.8:53
 
 ## DNS协议 ##
