@@ -1,5 +1,7 @@
 package main
 
+// 二进制数据包读写
+
 type Packet struct {
 	buf  []byte
 	size uint
@@ -43,9 +45,15 @@ func (p *Packet) WriteUint16(n uint16) bool {
 	return true
 }
 
+func (p *Packet) WriteUint(n uint) bool {
+	p.buf = append(p.buf, byte(n>>24&0xFF), byte(n>>16&0xFF), byte(n>>8&0xFF), byte(n&0xFF))
+	p.size += 4
+	return true
+}
+
 func (p *Packet) WriteBytes(bs []byte) bool {
 	p.buf = append(p.buf, bs...)
-	p.size += len(bs)
+	p.size += uint(len(bs))
 	return true
 }
 
@@ -59,6 +67,6 @@ func (p *Packet) Seek(n uint) {
 	}
 }
 
-func (p *Packet) Bytes() {
+func (p *Packet) Bytes() []byte {
 	return p.buf
 }

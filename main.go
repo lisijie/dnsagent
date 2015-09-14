@@ -1,11 +1,28 @@
 package main
 
 import (
+	"flag"
+	"github.com/lisijie/go-conf"
 	"log"
 	"net"
 )
 
+var (
+	config   *goconf.Config
+	confFile = flag.String("conf", "./config.ini", "配置文件路径")
+	dns      = flag.String("dns", "8.8.8.8:53", "DNS地址（本地查不到时向该服务器查询）")
+	isDebug  = flag.Bool("debug", false, "是否启用调试模式")
+)
+
 func main() {
+	flag.Parse()
+
+	var err error
+	config, err = goconf.NewConfig(*confFile)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
 
 	sock, err := net.ListenUDP("udp4", &net.UDPAddr{
 		IP:   net.IPv4(0, 0, 0, 0),
@@ -19,37 +36,38 @@ func main() {
 
 	defer sock.Close()
 
-	for {
+	log.Println("启动服务并监听 0.0.0.0:53 端口...")
 
+	for {
 		// 读取UDP数据包
 		buf := make([]byte, 1024)
 		n, addr, _ := sock.ReadFromUDP(buf)
 
-		// DNS报文解析
-		msg := UnpackMsg(buf)
-		if msg.question[0].Name == "www.test.com" {
-			msg.header.Flags.Qr = 1
-		}
+		go func() {
+			// DNS报文解析
+			msg := UnpackMsg(buf[:n])
+			if ip := config.GetString(msg.GetQuestion(0).Name); ip != "" {
+				msg.SetResponse()
+				msg.AddAnswer(NewA(msg.GetQuestion(0).Name, ip))
+				ret := PackMsg(msg)
+				sock.WriteToUDP(ret, addr)
+				debug("[L]解析: ", msg.GetQuestion(0).Name)
+			} else {
+				ret, err := query(buf[:n])
+				check_error(err)
+				if err == nil {
+					sock.WriteToUDP(ret, addr)
+				}
+				debug("[R]解析: ", msg.GetQuestion(0).Name)
+			}
+		}()
 
-		log.Println(msg.header, " | ", msg.header.Flags, " | ", msg.question[0].Name)
-
-		log.Println("from:", addr)
-		log.Println("len:", n, "bytes:", buf[0:n])
-
-		log.Println("str:", string(buf[:n]))
-
-		ret, err := query(buf[:n])
-		check_error(err)
-		if err == nil {
-			sock.WriteToUDP(ret, addr)
-		}
-		log.Println("return(", len(ret), "): ", ret)
 	}
 
 }
 
 func query(msg []byte) ([]byte, error) {
-	raddr, err := net.ResolveUDPAddr("udp", "172.19.240.19:53")
+	raddr, err := net.ResolveUDPAddr("udp", *dns)
 	if err != nil {
 		return nil, err
 	}
@@ -82,5 +100,7 @@ func check_error(err error) {
 }
 
 func debug(fmt ...interface{}) {
-	log.Println(fmt...)
+	if *isDebug {
+		log.Println(fmt...)
+	}
 }

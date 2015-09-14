@@ -1,23 +1,78 @@
 package main
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
-// 包头，12字节
-//                                     1  1  1  1  1  1
-//      0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
-//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-//    |                      ID                       |
-//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-//    |QR|   Opcode  |AA|TC|RD|RA|   Z    |   RCODE   |
-//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-//    |                    QDCOUNT                    |
-//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-//    |                    ANCOUNT                    |
-//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-//    |                    NSCOUNT                    |
-//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-//    |                    ARCOUNT                    |
-//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+// http://www.rfc-editor.org/rfc/rfc1035.txt
+//
+// DNS报文格式：
+//
+// +---------------------------+
+// | 报文头 |
+// +---------------------------+
+// | 问题　 | 向服务器提出的查询部分
+// +---------------------------+
+// | 回答　 | 服务器回复的资源记录
+// +---------------------------+
+// | 授权  | 权威的资源记录
+// +---------------------------+
+// | 格外的 | 格外的资源记录
+// +---------------------------+
+//
+// 说明：查询包只有包头和问题部分，回复包是在查询包的基础上追加了回答、授权、额外资源部分，并且修改了包头的相关标识。
+//
+// 报文头（12字节）：
+//                                 1  1  1  1  1  1
+//   0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+// |                      ID                       |
+// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+// |QR|   Opcode  |AA|TC|RD|RA|   Z    |   RCODE   |
+// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+// |                    QDCOUNT                    |
+// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+// |                    ANCOUNT                    |
+// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+// |                    NSCOUNT                    |
+// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+// |                    ARCOUNT                    |
+// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//
+// 查询部分结构：
+//   0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+// |                                               |
+// /                     QNAME                     /
+// /                                               /
+// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+// |                     QTYPE                     |
+// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+// |                     QCLASS                    |
+// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//
+// 应答资源结构（包括回答、授权、额外资源都使用同一结构）：
+//                                 1  1  1  1  1  1
+//   0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+// |                                               |
+// /                                               /
+// /                      NAME                     /
+// |                                               |
+// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+// |                      TYPE                     |
+// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+// |                     CLASS                     |
+// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+// |                      TTL                      |
+// |                                               |
+// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+// |                   RDLENGTH                    |
+// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--|
+// /                     RDATA                     /
+// /                                               /
+// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
 //
 type Header struct {
 	Id      uint16       // ID
@@ -59,39 +114,69 @@ type Resource struct {
 
 // 消息结构
 type Msg struct {
-	header   *Header
-	question []Question
-	Answer   []Resource
-	Ns       []Resource
-	Extra    []Resource
-}
-
-func (m *Msg) GetHeader() *Header {
-	return m.header
+	Header   *Header
+	Question []Question // 查询
+	Answer   []Resource // 回答，服务器回复的资源记录
+	Ns       []Resource // 授权，权威的资源记录
+	Extra    []Resource // 额外的, 额外的资源记录
 }
 
 func (m *Msg) GetQuestion(n uint) Question {
-	return m.question[n]
+	return m.Question[n]
+}
+
+// 设为回复
+func (m *Msg) SetResponse() {
+	m.Header.Flags.Qr = 1
+}
+
+func (m *Msg) AddAnswer(rs Resource) {
+	m.Answer = append(m.Answer, rs)
+	m.Header.Ancount++
+}
+
+func (m *Msg) AddNs(rs Resource) {
+	m.Ns = append(m.Ns, rs)
+}
+
+func (m *Msg) AddExtra(rs Resource) {
+	m.Extra = append(m.Extra, rs)
 }
 
 // 消息解析
 func UnpackMsg(buf []byte) *Msg {
 	pkt := NewPacket(buf)
 	msg := new(Msg)
-	msg.header = unpackHeader(pkt)
-	msg.question = unpackQuestion(pkt)
+	msg.Header = unpackHeader(pkt)
+	msg.Question = unpackQuestion(pkt)
 
 	return msg
 }
 
+// 消息打包
 func PackMsg(msg *Msg) []byte {
 	pkt := NewPacket(make([]byte, 0, 1024))
+	// 包头
+	pkt.WriteBytes(packHeader(msg.Header))
+	// 查询段
+	for _, q := range msg.Question {
+		pkt.WriteBytes(packQuestion(q))
+	}
+	for _, rs := range msg.Answer {
+		pkt.WriteBytes(packResource(rs))
+	}
+	for _, rs := range msg.Ns {
+		pkt.WriteBytes(packResource(rs))
+	}
+	for _, rs := range msg.Extra {
+		pkt.WriteBytes(packResource(rs))
+	}
 
 	return pkt.Bytes()
 }
 
 // 解析包头（12字节）
-func unpackHeader(pkt *packet) *Header {
+func unpackHeader(pkt *Packet) *Header {
 	hd := new(Header)
 	hd.Id = pkt.ReadUint16()
 	hd.Flags = unpackFlags(pkt.ReadUint16())
@@ -113,14 +198,14 @@ func unpackFlags(si uint16) *HeaderFlags {
 	flags.Tc = i >> 9 & 0x1      // 第10位
 	flags.Rd = i >> 8 & 0x1      // 第9位
 	flags.Ra = i >> 7 & 0x1      // 第8位
-	flags.Zero = 0
-	flags.Rcode = i & 0xF // 最后4位
+	flags.Zero = 0               // 第5-7位
+	flags.Rcode = i & 0xF        // 最后4位
 
 	return flags
 }
 
 // 解析查询段，只支持单个域名
-func unpackQuestion(pkt *packet) []Question {
+func unpackQuestion(pkt *Packet) []Question {
 	question := make([]Question, 1)
 	name := make([]string, 0)
 	for {
@@ -130,10 +215,90 @@ func unpackQuestion(pkt *packet) []Question {
 		}
 		name = append(name, string(pkt.ReadBytes(uint(b))))
 	}
-	debug(name)
 	question[0].Name = strings.Join(name, ".")
 	question[0].Type = pkt.ReadUint16()
 	question[0].Class = pkt.ReadUint16()
 
 	return question
+}
+
+// 打包包头
+func packHeader(hd *Header) []byte {
+	pkt := NewPacket(make([]byte, 0, 12))
+	pkt.WriteUint16(hd.Id)
+	flags := 0
+	flags |= hd.Flags.Qr << 15 & 0x8000
+	flags |= hd.Flags.Opcode << 11 & 0x7800
+	flags |= hd.Flags.Aa << 10 & 0x400
+	flags |= hd.Flags.Tc << 9 & 0x200
+	flags |= hd.Flags.Rd << 8 & 0x100
+	flags |= hd.Flags.Ra << 7 & 0x80
+	flags |= hd.Flags.Zero << 4 & 0x70
+	flags |= hd.Flags.Rcode & 0xF
+	pkt.WriteUint16(uint16(flags))
+	pkt.WriteUint16(hd.Qdcount)
+	pkt.WriteUint16(hd.Ancount)
+	pkt.WriteUint16(hd.Nscount)
+	pkt.WriteUint16(hd.Arcount)
+
+	return pkt.Bytes()
+}
+
+// 打包查询
+func packQuestion(qs Question) []byte {
+	pkt := NewPacket(make([]byte, 0, 256))
+	pkt.WriteBytes(packName(qs.Name))
+	pkt.WriteUint16(qs.Type)
+	pkt.WriteUint16(qs.Class)
+
+	return pkt.Bytes()
+}
+
+// 打包资源
+func packResource(rs Resource) []byte {
+	pkt := NewPacket(make([]byte, 0, 256))
+	pkt.WriteBytes(packName(rs.Name))
+	pkt.WriteUint16(rs.Type)
+	pkt.WriteUint16(rs.Class)
+	pkt.WriteUint(rs.TTL)
+	pkt.WriteUint16(uint16(len(rs.Rdata)))
+	pkt.WriteString(rs.Rdata)
+
+	return pkt.Bytes()
+}
+
+// 打包域名
+func packName(name string) []byte {
+	parts := strings.Split(name, ".")
+	buf := make([]byte, 0, 256)
+	for _, v := range parts {
+		buf = append(buf, byte(len(v)))
+		buf = append(buf, []byte(v)...)
+	}
+	buf = append(buf, byte(0x0))
+
+	return buf
+}
+
+func packIp(ip string) string {
+	bs := make([]byte, 4)
+	parts := strings.Split(ip, ".")
+	for i := 0; i < 4; i++ {
+		i32, _ := strconv.Atoi(parts[i])
+		bs[i] = byte(i32)
+	}
+
+	return string(bs)
+}
+
+func NewA(domain string, ip string) Resource {
+	var rs Resource
+	rs.Name = domain
+	rs.Type = TypeA
+	rs.Class = ClassIN
+	rs.TTL = 284
+	rs.Rdlenth = 4
+	rs.Rdata = packIp(ip)
+
+	return rs
 }
