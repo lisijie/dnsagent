@@ -137,10 +137,12 @@ func (m *Msg) AddAnswer(rs Resource) {
 
 func (m *Msg) AddNs(rs Resource) {
 	m.Ns = append(m.Ns, rs)
+	m.Header.Nscount++
 }
 
 func (m *Msg) AddExtra(rs Resource) {
 	m.Extra = append(m.Extra, rs)
+	m.Header.Arcount++
 }
 
 // 消息解析
