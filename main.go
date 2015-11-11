@@ -5,6 +5,8 @@ import (
 	"github.com/lisijie/go-conf"
 	"log"
 	"net"
+	"regexp"
+	"strings"
 )
 
 var (
@@ -38,6 +40,16 @@ func main() {
 
 	log.Println("启动服务并监听 0.0.0.0:53 端口...")
 
+	// 找出有包含通配符的，用正则替代
+	regMap := make(map[string]string)
+	for name, ip := range config.GetAll() {
+		if strings.Contains(name, "*") {
+			rv := regexp.QuoteMeta(name)
+			rv = strings.Replace(rv, "\\*", "(.*)", -1)
+			regMap[rv] = ip
+		}
+	}
+
 	for {
 		// 读取UDP数据包
 		buf := make([]byte, 1024)
@@ -53,6 +65,16 @@ func main() {
 				sock.WriteToUDP(ret, addr)
 				debug("[L]解析: ", msg.GetQuestion(0).Name)
 			} else {
+				for rexp, ip := range regMap {
+					if ok, _ := regexp.MatchString(rexp, msg.GetQuestion(0).Name); ok {
+						msg.SetResponse()
+						msg.AddAnswer(NewA(msg.GetQuestion(0).Name, ip))
+						ret := PackMsg(msg)
+						sock.WriteToUDP(ret, addr)
+						debug("[L2]解析: ", msg.GetQuestion(0).Name)
+						return
+					}
+				}
 				ret, err := query(buf[:n])
 				check_error(err)
 				if err == nil {
